@@ -37,12 +37,13 @@
             flex: 1; display: flex; flex-direction: column; align-items: center;
             justify-content: center; padding: 20px; text-align: center;
         }
-        /* 稍微調整顯示區字體，讓小寫看起來更清楚 */
         #current-word { font-size: 60px; letter-spacing: 5px; color: #333; min-height: 80px; font-weight: bold; }
         #message { font-size: 24px; color: #ff9800; margin-top: 15px; white-space: pre-line; }
     </style>
 </head>
 <body>
+
+    <audio id="ios-audio-player"></audio>
 
     <div class="keyboard-area" id="keyboard"></div>
 
@@ -57,29 +58,34 @@
         const wordDisplay = document.getElementById("current-word");
         const messageDisplay = document.getElementById("message");
         const keyboard = document.getElementById("keyboard");
+        
+        // 取得隱藏的音樂播放器
+        const audioPlayer = document.getElementById("ios-audio-player");
 
-        // --- 1. 強化版：手機語音解鎖機制 ---
+        // --- 1. 針對 iPhone 的 MP3 播放器解鎖機制 ---
         function unlockAudio() {
             if (!isAudioUnlocked) {
-                // 發出一個完全無聲的聲音，騙過手機的安全機制
-                let silentUtterance = new SpeechSynthesisUtterance('');
-                silentUtterance.volume = 0; 
-                window.speechSynthesis.speak(silentUtterance);
-                window.speechSynthesis.resume(); // 強制喚醒引擎
+                // 播放一段只有 0.1 秒的「無聲白噪音 MP3」，徹底解鎖播放器權限
+                audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+                audioPlayer.play().catch(() => {}); // 忽略無聲播放的錯誤提示
                 isAudioUnlocked = true;
             }
         }
+        // iPhone 只要點擊螢幕任何地方，就會偷偷解鎖播放器
         document.addEventListener('touchstart', unlockAudio, { once: true });
         document.addEventListener('click', unlockAudio, { once: true });
 
-        // --- 2. 字母改成「小寫」 ---
-        // 只要把這裡的字串換成小寫，整個鍵盤和畫面就會自動變成小寫了！
+        // --- 2. 字母區 (小寫) ---
         const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
         alphabet.forEach(letter => {
             let btn = document.createElement("button");
             btn.className = "letter-btn";
             btn.innerText = letter;
-            btn.onclick = () => handleLetterClick(letter);
+            btn.onclick = () => {
+                unlockAudio(); 
+                currentString += letter;
+                updateDisplay("拼湊中...", "#ff9800");
+            };
             keyboard.appendChild(btn);
         });
 
@@ -95,34 +101,23 @@
         let backspaceBtn = document.createElement("button");
         backspaceBtn.className = "control-btn btn-backspace";
         backspaceBtn.innerText = "⬅ 刪除";
-        backspaceBtn.onclick = handleBackspace;
+        backspaceBtn.onclick = () => {
+            currentString = currentString.slice(0, -1); 
+            updateDisplay(currentString.length > 0 ? "拼湊中..." : "請點擊字母開始拼字！", "#ff9800");
+        };
 
         let clearBtn = document.createElement("button");
         clearBtn.className = "control-btn btn-clear";
         clearBtn.innerText = "全清除";
-        clearBtn.onclick = clearWord;
+        clearBtn.onclick = () => {
+            currentString = "";
+            updateDisplay("請點擊字母，拼完後按下確定！", "#ff9800");
+        };
 
         controlGroup.appendChild(confirmBtn);
         controlGroup.appendChild(backspaceBtn);
         controlGroup.appendChild(clearBtn);
         keyboard.appendChild(controlGroup);
-
-        // --- 3. 按鈕互動邏輯 ---
-        function handleLetterClick(letter) {
-            unlockAudio(); // 每次按字母都再次確保語音引擎是醒著的
-            currentString += letter;
-            updateDisplay("拼湊中...", "#ff9800");
-        }
-
-        function handleBackspace() {
-            currentString = currentString.slice(0, -1); 
-            updateDisplay(currentString.length > 0 ? "拼湊中..." : "請點擊字母開始拼字！", "#ff9800");
-        }
-
-        function clearWord() {
-            currentString = "";
-            updateDisplay("請點擊字母，拼完後按下確定！", "#ff9800");
-        }
 
         function updateDisplay(msg, color) {
             wordDisplay.innerText = currentString;
@@ -130,7 +125,7 @@
             messageDisplay.style.color = color;
         }
 
-        // --- 4. 核心檢查邏輯 ---
+        // --- 3. 核心檢查邏輯 ---
         function handleConfirmClick() {
             if (currentString.length === 0) {
                 updateDisplay("請先輸入字母喔！", "#f44336");
@@ -145,7 +140,7 @@
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
                 
                 if (response.ok) {
-                    speakWord(word); // 呼叫強化版的發音功能
+                    speakWord(word); // 呼叫 MP3 播放器發音
                     updateDisplay("恭喜！這是一個單字！🎉\n正在翻譯中...", "#4CAF50");
                     
                     // ⚠️ 將下方網址換成您的 Google API
@@ -162,16 +157,11 @@
             }
         }
 
-        // --- 5. 強化版：強制突破手機限制的發音功能 ---
+        // --- 4. 終極版發音：抓取 Google 官方 MP3 音檔 ---
         function speakWord(word) {
-            window.speechSynthesis.cancel(); // 秘訣 1：先清除所有卡住的聲音
-            
-            let utterance = new SpeechSynthesisUtterance(word);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9; // 語速稍微放慢，對國小生更友善
-            
-            window.speechSynthesis.speak(utterance);
-            window.speechSynthesis.resume(); // 秘訣 2：強制推動語音引擎播放
+            // 直接將播放器的來源，設定為 Google 翻譯的官方發音音檔網址
+            audioPlayer.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=${word}`;
+            audioPlayer.play();
         }
     </script>
 </body>
