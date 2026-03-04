@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英文拼字練習</title>
+    <style>
+        /* 基礎排版設定 */
+        body {
+            display: flex;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            height: 100vh;
+            background-color: #f0f8ff;
+            user-select: none;
+        }
+        /* 左邊鍵盤區 */
+        .keyboard-area {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 10px;
+            border-right: 2px dashed #ccc;
+        }
+        .letter-btn {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #fff;
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .letter-btn:active {
+            background-color: #4CAF50;
+            color: white;
+            transform: scale(0.95);
+        }
+        /* 控制按鈕區 (包含確定與清除) */
+        .control-group {
+            width: 100%;
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .control-btn {
+            flex: 1;
+            height: 60px;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .btn-confirm { background-color: #2196F3; } /* 藍色確定鍵 */
+        .btn-clear { background-color: #f44336; }   /* 紅色清除鍵 */
+        
+        /* 右邊顯示區 */
+        .display-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+        #current-word {
+            font-size: 60px;
+            letter-spacing: 10px;
+            color: #333;
+            min-height: 80px;
+            font-weight: bold;
+        }
+        #message {
+            font-size: 30px;
+            color: #ff9800;
+            margin-top: 20px;
+            white-space: pre-line; /* 讓 \n 可以順利換行顯示 */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="keyboard-area" id="keyboard">
+        </div>
+
+    <div class="display-area">
+        <div id="current-word"></div>
+        <div id="message">請點擊左邊字母，拼完後按下確定！</div>
+    </div>
+
+    <script>
+        let currentString = "";
+        const wordDisplay = document.getElementById("current-word");
+        const messageDisplay = document.getElementById("message");
+        const keyboard = document.getElementById("keyboard");
+
+        // 1. 自動產生 A-Z 的按鈕
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        alphabet.forEach(letter => {
+            let btn = document.createElement("button");
+            btn.className = "letter-btn";
+            btn.innerText = letter;
+            btn.onclick = () => handleLetterClick(letter);
+            keyboard.appendChild(btn);
+        });
+
+        // 建立控制按鈕群組 (確定 + 清除)
+        let controlGroup = document.createElement("div");
+        controlGroup.className = "control-group";
+
+        let confirmBtn = document.createElement("button");
+        confirmBtn.className = "control-btn btn-confirm";
+        confirmBtn.innerText = "確定送出";
+        confirmBtn.onclick = handleConfirmClick; // 綁定確定鍵的功能
+
+        let clearBtn = document.createElement("button");
+        clearBtn.className = "control-btn btn-clear";
+        clearBtn.innerText = "清除重來";
+        clearBtn.onclick = clearWord;
+
+        controlGroup.appendChild(confirmBtn);
+        controlGroup.appendChild(clearBtn);
+        keyboard.appendChild(controlGroup);
+
+        // 2. 處理字母點擊 (現在只負責顯示，不負責檢查了)
+        function handleLetterClick(letter) {
+            currentString += letter;
+            wordDisplay.innerText = currentString;
+            messageDisplay.innerText = "拼湊中...";
+            messageDisplay.style.color = "#ff9800";
+        }
+
+        // 3. 處理「確定送出」點擊
+        function handleConfirmClick() {
+            if (currentString.length === 0) {
+                messageDisplay.innerText = "請先輸入字母喔！";
+                return;
+            }
+            messageDisplay.innerText = "檢查中，請稍候...";
+            messageDisplay.style.color = "#2196F3";
+            checkIfValidWord(currentString);
+        }
+
+        // 4. 檢查單字與翻譯邏輯
+        async function checkIfValidWord(word) {
+            try {
+                // 向字典 API 確認是不是真實單字
+                let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                
+                if (response.ok) {
+                    // 找到單字！
+                    speakWord(word);
+                    messageDisplay.innerText = "恭喜！這是一個單字！🎉 正在翻譯中...";
+                    messageDisplay.style.color = "#4CAF50";
+                    
+                    // ⚠️ 請把下面這串網址換成您剛剛在 Google 複製的 API 網址
+                    let gasUrl = `https://script.google.com/macros/s/AKfycbz4bOT00wJck7SpSxNgUtFCItmQF7uuJ2HpniPQZGOkzP818pU6UdFtOZ923-QqLd3RKQ/exec?word=${word}`;
+                    
+                    let transResponse = await fetch(gasUrl);
+                    let translatedText = await transResponse.text();
+                    
+                    // 顯示最終結果
+                    messageDisplay.innerText = `恭喜！這是一個單字！🎉\n中文意思：${translatedText}`;
+                } else {
+                    // 找不到單字 (404 Not Found)
+                    messageDisplay.innerText = "這好像不是一個完整的單字喔，要不要再檢查一下？🤔";
+                    messageDisplay.style.color = "#f44336";
+                }
+            } catch (error) {
+                console.log("查詢錯誤", error);
+                messageDisplay.innerText = "網路連線發生錯誤，請稍後再試。";
+            }
+        }
+
+        // 5. 發音功能
+        function speakWord(word) {
+            let utterance = new SpeechSynthesisUtterance(word);
+            utterance.lang = 'en-US';
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // 6. 清除重來
+        function clearWord() {
+            currentString = "";
+            wordDisplay.innerText = "";
+            messageDisplay.innerText = "請點擊左邊字母，拼完後按下確定！";
+            messageDisplay.style.color = "#ff9800";
+        }
+    </script>
+</body>
+</html>
