@@ -8,17 +8,17 @@
         body {
             display: flex; flex-direction: column; font-family: 'Arial', sans-serif;
             margin: 0; height: 100vh; background-color: #f0f8ff; user-select: none;
-            touch-action: manipulation; /* 防止雙擊放大，適合平板 */
+            touch-action: manipulation;
         }
-        @media (min-width: 768px) { body { flex-direction: row; } } /* 平板以上變左右排列 */
+        @media (min-width: 768px) { body { flex-direction: row; } }
         
         .keyboard-area {
             flex: 1; padding: 20px; display: flex; flex-wrap: wrap; 
             align-content: flex-start; gap: 8px; border-right: 2px dashed #ccc;
         }
         .letter-btn {
-            width: calc(100% / 6 - 10px); /* 讓按鈕自動排版 */
-            min-width: 50px; height: 60px; font-size: 24px; font-weight: bold;
+            width: calc(100% / 6 - 10px); 
+            min-width: 50px; height: 60px; font-size: 26px; font-weight: bold;
             background-color: #fff; border: 2px solid #4CAF50; border-radius: 10px;
             cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
@@ -30,14 +30,15 @@
             border: none; border-radius: 10px; cursor: pointer;
         }
         .btn-confirm { background-color: #2196F3; } 
-        .btn-backspace { background-color: #ff9800; } /* 黃色退格鍵 */
+        .btn-backspace { background-color: #ff9800; } 
         .btn-clear { background-color: #f44336; }   
         
         .display-area {
             flex: 1; display: flex; flex-direction: column; align-items: center;
             justify-content: center; padding: 20px; text-align: center;
         }
-        #current-word { font-size: 50px; letter-spacing: 5px; color: #333; min-height: 70px; font-weight: bold; }
+        /* 稍微調整顯示區字體，讓小寫看起來更清楚 */
+        #current-word { font-size: 60px; letter-spacing: 5px; color: #333; min-height: 80px; font-weight: bold; }
         #message { font-size: 24px; color: #ff9800; margin-top: 15px; white-space: pre-line; }
     </style>
 </head>
@@ -52,27 +53,28 @@
 
     <script>
         let currentString = "";
-        let isAudioUnlocked = false; // 紀錄語音是否已解鎖
+        let isAudioUnlocked = false; 
         const wordDisplay = document.getElementById("current-word");
         const messageDisplay = document.getElementById("message");
         const keyboard = document.getElementById("keyboard");
 
-        // --- 1. 手機語音解鎖機制 ---
+        // --- 1. 強化版：手機語音解鎖機制 ---
         function unlockAudio() {
             if (!isAudioUnlocked) {
+                // 發出一個完全無聲的聲音，騙過手機的安全機制
                 let silentUtterance = new SpeechSynthesisUtterance('');
-                silentUtterance.volume = 0; // 無聲
+                silentUtterance.volume = 0; 
                 window.speechSynthesis.speak(silentUtterance);
+                window.speechSynthesis.resume(); // 強制喚醒引擎
                 isAudioUnlocked = true;
             }
         }
-        // 當使用者第一次點擊螢幕任何地方時，觸發解鎖
         document.addEventListener('touchstart', unlockAudio, { once: true });
         document.addEventListener('click', unlockAudio, { once: true });
 
-
-        // --- 2. 產生鍵盤與控制鍵 ---
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        // --- 2. 字母改成「小寫」 ---
+        // 只要把這裡的字串換成小寫，整個鍵盤和畫面就會自動變成小寫了！
+        const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
         alphabet.forEach(letter => {
             let btn = document.createElement("button");
             btn.className = "letter-btn";
@@ -81,6 +83,7 @@
             keyboard.appendChild(btn);
         });
 
+        // 建立控制按鈕
         let controlGroup = document.createElement("div");
         controlGroup.className = "control-group";
 
@@ -89,7 +92,6 @@
         confirmBtn.innerText = "確定";
         confirmBtn.onclick = handleConfirmClick;
 
-        // 新增：退格鍵 (刪除上一個字母)
         let backspaceBtn = document.createElement("button");
         backspaceBtn.className = "control-btn btn-backspace";
         backspaceBtn.innerText = "⬅ 刪除";
@@ -107,12 +109,13 @@
 
         // --- 3. 按鈕互動邏輯 ---
         function handleLetterClick(letter) {
+            unlockAudio(); // 每次按字母都再次確保語音引擎是醒著的
             currentString += letter;
             updateDisplay("拼湊中...", "#ff9800");
         }
 
         function handleBackspace() {
-            currentString = currentString.slice(0, -1); // 刪除最後一個字母
+            currentString = currentString.slice(0, -1); 
             updateDisplay(currentString.length > 0 ? "拼湊中..." : "請點擊字母開始拼字！", "#ff9800");
         }
 
@@ -142,7 +145,7 @@
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
                 
                 if (response.ok) {
-                    speakWord(word); // 因為前面已經解鎖，這裡就不會被手機擋掉了！
+                    speakWord(word); // 呼叫強化版的發音功能
                     updateDisplay("恭喜！這是一個單字！🎉\n正在翻譯中...", "#4CAF50");
                     
                     // ⚠️ 將下方網址換成您的 Google API
@@ -159,10 +162,16 @@
             }
         }
 
+        // --- 5. 強化版：強制突破手機限制的發音功能 ---
         function speakWord(word) {
+            window.speechSynthesis.cancel(); // 秘訣 1：先清除所有卡住的聲音
+            
             let utterance = new SpeechSynthesisUtterance(word);
             utterance.lang = 'en-US';
+            utterance.rate = 0.9; // 語速稍微放慢，對國小生更友善
+            
             window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.resume(); // 秘訣 2：強制推動語音引擎播放
         }
     </script>
 </body>
