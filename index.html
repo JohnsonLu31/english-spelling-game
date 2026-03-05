@@ -58,20 +58,16 @@
         const wordDisplay = document.getElementById("current-word");
         const messageDisplay = document.getElementById("message");
         const keyboard = document.getElementById("keyboard");
-        
-        // 取得隱藏的音樂播放器
         const audioPlayer = document.getElementById("ios-audio-player");
 
-        // --- 1. 針對 iPhone 的 MP3 播放器解鎖機制 ---
+        // --- 1. 手機音訊解鎖機制 ---
         function unlockAudio() {
             if (!isAudioUnlocked) {
-                // 播放一段只有 0.1 秒的「無聲白噪音 MP3」，徹底解鎖播放器權限
                 audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-                audioPlayer.play().catch(() => {}); // 忽略無聲播放的錯誤提示
+                audioPlayer.play().catch(() => {});
                 isAudioUnlocked = true;
             }
         }
-        // iPhone 只要點擊螢幕任何地方，就會偷偷解鎖播放器
         document.addEventListener('touchstart', unlockAudio, { once: true });
         document.addEventListener('click', unlockAudio, { once: true });
 
@@ -89,7 +85,7 @@
             keyboard.appendChild(btn);
         });
 
-        // 建立控制按鈕
+        // 控制按鈕
         let controlGroup = document.createElement("div");
         controlGroup.className = "control-group";
 
@@ -125,7 +121,7 @@
             messageDisplay.style.color = color;
         }
 
-        // --- 3. 核心檢查邏輯 ---
+        // --- 3. 核心檢查與發音邏輯 ---
         function handleConfirmClick() {
             if (currentString.length === 0) {
                 updateDisplay("請先輸入字母喔！", "#f44336");
@@ -137,10 +133,16 @@
 
         async function checkIfValidWord(word) {
             try {
+                // 向字典 API 查詢單字
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
                 
                 if (response.ok) {
-                    speakWord(word); // 呼叫 MP3 播放器發音
+                    // 🎉 成功！將回傳的資料轉成 JSON 格式
+                    let data = await response.json();
+                    
+                    // 從字典 API 的資料中，把 MP3 音檔抓出來播放
+                    playDictionaryAudio(data, word);
+
                     updateDisplay("恭喜！這是一個單字！🎉\n正在翻譯中...", "#4CAF50");
                     
                     // ⚠️ 將下方網址換成您的 Google API
@@ -157,11 +159,28 @@
             }
         }
 
-        // --- 4. 終極版發音：抓取 Google 官方 MP3 音檔 ---
-        function speakWord(word) {
-            // 直接將播放器的來源，設定為 Google 翻譯的官方發音音檔網址
-            audioPlayer.src = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=${word}`;
-            audioPlayer.play();
+        // --- 4. 播放字典專屬 MP3 音檔 ---
+        function playDictionaryAudio(data, word) {
+            let audioUrl = "";
+            
+            // 字典資料裡可能有多個發音，我們尋找有 MP3 網址的那個
+            for (let phonetic of data[0].phonetics) {
+                if (phonetic.audio && phonetic.audio !== "") {
+                    audioUrl = phonetic.audio;
+                    break;
+                }
+            }
+
+            // 如果字典有提供 MP3，就用播放器播出來 (解決 iPhone 限制)
+            if (audioUrl !== "") {
+                audioPlayer.src = audioUrl;
+                audioPlayer.play().catch(e => console.log("播放失敗", e));
+            } else {
+                // 防呆機制：萬一這個單字字典剛好沒錄音檔，就退回使用內建發音
+                let utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = 'en-US';
+                window.speechSynthesis.speak(utterance);
+            }
         }
     </script>
 </body>
