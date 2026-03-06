@@ -60,6 +60,13 @@
         const keyboard = document.getElementById("keyboard");
         const audioPlayer = document.getElementById("ios-audio-player");
 
+        // --- 新增：手動屏蔽的不雅字詞黑名單 (全部使用小寫) ---
+        const badWordsBlacklist = [
+            "fuck", "shit", "bitch", "ass", "asshole", 
+            "dick", "cock", "pussy", "sex", "crap", "damn",
+            "idiot", "stupid"
+        ];
+
         // --- 1. 手機音訊解鎖機制 ---
         function unlockAudio() {
             if (!isAudioUnlocked) {
@@ -121,26 +128,52 @@
             messageDisplay.style.color = color;
         }
 
-        // --- 3. 核心檢查與發音邏輯 ---
+        // --- 3. 核心檢查與攔截邏輯 ---
         function handleConfirmClick() {
             if (currentString.length === 0) {
                 updateDisplay("請先輸入字母喔！", "#f44336");
                 return;
             }
+
+            // 【攔截器】檢查是否觸發黑名單
+            if (badWordsBlacklist.includes(currentString)) {
+                triggerFunBlocker();
+                return; // 直接中斷，不往下執行 API 查詢
+            }
+
             updateDisplay("檢查中，請稍候...", "#2196F3");
             checkIfValidWord(currentString);
         }
 
+        // --- 新增：趣味化屏蔽反應 ---
+        function triggerFunBlocker() {
+            // 將畫面上的字替換成亂碼或符號，避免不雅字詞持續留在畫面上
+            wordDisplay.innerText = "🙈 🙉 🙊"; 
+            
+            // 顯示趣味提示
+            messageDisplay.innerText = "哎呀！這個字太調皮了，被猴子抓走了！\n請換一個單字試試看吧！";
+            messageDisplay.style.color = "#9C27B0"; // 用一個特別的紫色
+
+            // 播放一個滑稽的內建語音 (例如唸出 "Oops!")
+            let utterance = new SpeechSynthesisUtterance("Oops!");
+            utterance.lang = 'en-US';
+            utterance.pitch = 2; // 提高音調變得很像卡通人物
+            window.speechSynthesis.speak(utterance);
+
+            // 兩秒後自動清除，讓小朋友可以繼續操作
+            setTimeout(() => {
+                currentString = "";
+                updateDisplay("請點擊字母開始拼字！", "#ff9800");
+            }, 2500);
+        }
+
+        // --- 4. API 查詢與發音邏輯 ---
         async function checkIfValidWord(word) {
             try {
-                // 向字典 API 查詢單字
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
                 
                 if (response.ok) {
-                    // 🎉 成功！將回傳的資料轉成 JSON 格式
                     let data = await response.json();
-                    
-                    // 從字典 API 的資料中，把 MP3 音檔抓出來播放
                     playDictionaryAudio(data, word);
 
                     updateDisplay("恭喜！這是一個單字！🎉\n正在翻譯中...", "#4CAF50");
@@ -159,11 +192,8 @@
             }
         }
 
-        // --- 4. 播放字典專屬 MP3 音檔 ---
         function playDictionaryAudio(data, word) {
             let audioUrl = "";
-            
-            // 字典資料裡可能有多個發音，我們尋找有 MP3 網址的那個
             for (let phonetic of data[0].phonetics) {
                 if (phonetic.audio && phonetic.audio !== "") {
                     audioUrl = phonetic.audio;
@@ -171,12 +201,10 @@
                 }
             }
 
-            // 如果字典有提供 MP3，就用播放器播出來 (解決 iPhone 限制)
             if (audioUrl !== "") {
                 audioPlayer.src = audioUrl;
                 audioPlayer.play().catch(e => console.log("播放失敗", e));
             } else {
-                // 防呆機制：萬一這個單字字典剛好沒錄音檔，就退回使用內建發音
                 let utterance = new SpeechSynthesisUtterance(word);
                 utterance.lang = 'en-US';
                 window.speechSynthesis.speak(utterance);
@@ -185,3 +213,4 @@
     </script>
 </body>
 </html>
+
