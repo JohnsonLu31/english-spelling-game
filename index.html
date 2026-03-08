@@ -6,25 +6,45 @@
     <title>英文拼字練習</title>
     <style>
         body {
-            display: flex; flex-direction: column; font-family: 'Arial', sans-serif;
-            margin: 0; height: 100vh; background-color: #f0f8ff; user-select: none;
+            font-family: 'Arial', sans-serif;
+            margin: 0; 
+            height: 100vh; 
+            background-color: #f0f8ff; 
+            user-select: none;
             touch-action: manipulation;
         }
-        @media (min-width: 768px) { body { flex-direction: row; } }
         
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        @media (min-width: 768px) { .main-container { flex-direction: row; } }
+        
+        /* 左半部：單一字母與控制鍵 */
+        .left-panel {
+            flex: 1; 
+            display: flex; 
+            flex-direction: column;
+            padding: 20px; 
+            border-right: 2px dashed #ccc;
+        }
         .keyboard-area {
-            flex: 1; padding: 20px; display: flex; flex-wrap: wrap; 
-            align-content: flex-start; gap: 8px; border-right: 2px dashed #ccc;
+            display: flex; 
+            flex-wrap: wrap; 
+            align-content: flex-start; 
+            gap: 8px; 
+            flex: 1;
         }
         .letter-btn {
-            width: calc(100% / 6 - 10px); 
-            min-width: 50px; height: 60px; font-size: 26px; font-weight: bold;
+            width: calc(100% / 5 - 8px); 
+            min-width: 45px; height: 60px; font-size: 26px; font-weight: bold;
             background-color: #fff; border: 2px solid #4CAF50; border-radius: 10px;
             cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .letter-btn:active { background-color: #4CAF50; color: white; transform: scale(0.95); }
         
-        .control-group { width: 100%; display: flex; gap: 10px; margin-top: 15px; }
+        .control-group { display: flex; gap: 10px; margin-top: 15px; }
         .control-btn {
             flex: 1; height: 50px; font-size: 18px; font-weight: bold; color: white;
             border: none; border-radius: 10px; cursor: pointer;
@@ -33,23 +53,57 @@
         .btn-backspace { background-color: #ff9800; } 
         .btn-clear { background-color: #f44336; }   
         
+        /* 右半部：顯示區與組合字母區 */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 右上：顯示區 */
         .display-area {
-            flex: 1; display: flex; flex-direction: column; align-items: center;
+            flex: 6; 
+            display: flex; flex-direction: column; align-items: center;
             justify-content: center; padding: 20px; text-align: center;
         }
         #current-word { font-size: 60px; letter-spacing: 5px; color: #333; min-height: 80px; font-weight: bold; }
         #message { font-size: 24px; color: #ff9800; margin-top: 15px; white-space: pre-line; }
+        
+        /* 右下：組合字母區 */
+        .combo-area {
+            flex: 4;
+            display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
+            padding: 20px;
+            background-color: #e8f5e9; /* 稍微不同的背景色以作區隔 */
+            border-top: 2px dashed #ccc;
+        }
+        .combo-btn {
+            width: calc(100% / 4 - 8px); 
+            min-width: 55px; height: 60px; font-size: 22px; font-weight: bold;
+            background-color: #fff; border: 2px solid #9C27B0; border-radius: 10px;
+            color: #9C27B0; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .combo-btn:active { background-color: #9C27B0; color: white; transform: scale(0.95); }
+
     </style>
 </head>
 <body>
 
     <audio id="ios-audio-player"></audio>
 
-    <div class="keyboard-area" id="keyboard"></div>
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="keyboard-area" id="keyboard"></div>
+            <div class="control-group" id="controls"></div>
+        </div>
 
-    <div class="display-area">
-        <div id="current-word"></div>
-        <div id="message">請點擊字母，拼完後按下確定！</div>
+        <div class="right-panel">
+            <div class="display-area">
+                <div id="current-word"></div>
+                <div id="message">請點擊字母，拼完後按下確定！</div>
+            </div>
+            <div class="combo-area" id="combo-keyboard"></div>
+        </div>
     </div>
 
     <script>
@@ -58,16 +112,17 @@
         const wordDisplay = document.getElementById("current-word");
         const messageDisplay = document.getElementById("message");
         const keyboard = document.getElementById("keyboard");
+        const comboKeyboard = document.getElementById("combo-keyboard");
+        const controls = document.getElementById("controls");
         const audioPlayer = document.getElementById("ios-audio-player");
 
-        // --- 新增：手動屏蔽的不雅字詞黑名單 (全部使用小寫) ---
+        // 黑名單
         const badWordsBlacklist = [
             "fuck", "shit", "bitch", "ass", "asshole", 
             "dick", "cock", "pussy", "sex", "crap", "damn",
             "idiot", "stupid"
         ];
 
-        // --- 1. 手機音訊解鎖機制 ---
         function unlockAudio() {
             if (!isAudioUnlocked) {
                 audioPlayer.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -78,24 +133,30 @@
         document.addEventListener('touchstart', unlockAudio, { once: true });
         document.addEventListener('click', unlockAudio, { once: true });
 
-        // --- 2. 字母區 (小寫) ---
+        // --- 輸入邏輯 (支援底線替換) ---
+        function handleInput(input) {
+            unlockAudio(); 
+            
+            // 若目前字串包含底線，則將底線替換為新輸入的字母或組合
+            if (currentString.includes('_')) {
+                currentString = currentString.replace('_', input);
+            } else {
+                currentString += input;
+            }
+            updateDisplay("拼湊中...", "#ff9800");
+        }
+
+        // --- 1. 左側字母區 (a-z) ---
         const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
         alphabet.forEach(letter => {
             let btn = document.createElement("button");
             btn.className = "letter-btn";
             btn.innerText = letter;
-            btn.onclick = () => {
-                unlockAudio(); 
-                currentString += letter;
-                updateDisplay("拼湊中...", "#ff9800");
-            };
+            btn.onclick = () => handleInput(letter);
             keyboard.appendChild(btn);
         });
 
-        // 控制按鈕
-        let controlGroup = document.createElement("div");
-        controlGroup.className = "control-group";
-
+        // --- 2. 控制按鈕 ---
         let confirmBtn = document.createElement("button");
         confirmBtn.className = "control-btn btn-confirm";
         confirmBtn.innerText = "確定";
@@ -105,6 +166,7 @@
         backspaceBtn.className = "control-btn btn-backspace";
         backspaceBtn.innerText = "⬅ 刪除";
         backspaceBtn.onclick = () => {
+            // 刪除最後一個字元 (若剛好是組合字元的最後一個字母也會被單一刪除)
             currentString = currentString.slice(0, -1); 
             updateDisplay(currentString.length > 0 ? "拼湊中..." : "請點擊字母開始拼字！", "#ff9800");
         };
@@ -117,10 +179,22 @@
             updateDisplay("請點擊字母，拼完後按下確定！", "#ff9800");
         };
 
-        controlGroup.appendChild(confirmBtn);
-        controlGroup.appendChild(backspaceBtn);
-        controlGroup.appendChild(clearBtn);
-        keyboard.appendChild(controlGroup);
+        controls.appendChild(confirmBtn);
+        controls.appendChild(backspaceBtn);
+        controls.appendChild(clearBtn);
+
+        // --- 3. 右下組合字母區 ---
+        const combos = ["th", "ch", "sh", "tr", "cr", "br", "gr", "bl"];
+        const magicE = ["a_e", "e_e", "i_e", "o_e", "u_e"];
+        const allCombos = combos.concat(magicE);
+
+        allCombos.forEach(combo => {
+            let btn = document.createElement("button");
+            btn.className = "combo-btn";
+            btn.innerText = combo;
+            btn.onclick = () => handleInput(combo);
+            comboKeyboard.appendChild(btn);
+        });
 
         function updateDisplay(msg, color) {
             wordDisplay.innerText = currentString;
@@ -128,46 +202,43 @@
             messageDisplay.style.color = color;
         }
 
-        // --- 3. 核心檢查與攔截邏輯 ---
+        // --- 4. 核心檢查與攔截邏輯 ---
         function handleConfirmClick() {
             if (currentString.length === 0) {
                 updateDisplay("請先輸入字母喔！", "#f44336");
                 return;
             }
+            if (currentString.includes('_')) {
+                updateDisplay("底線尚未填寫完畢喔！", "#f44336");
+                return;
+            }
 
-            // 【攔截器】檢查是否觸發黑名單
             if (badWordsBlacklist.includes(currentString)) {
                 triggerFunBlocker();
-                return; // 直接中斷，不往下執行 API 查詢
+                return; 
             }
 
             updateDisplay("檢查中，請稍候...", "#2196F3");
             checkIfValidWord(currentString);
         }
 
-        // --- 新增：趣味化屏蔽反應 ---
         function triggerFunBlocker() {
-            // 將畫面上的字替換成亂碼或符號，避免不雅字詞持續留在畫面上
             wordDisplay.innerText = "🙈 🙉 🙊"; 
-            
-            // 顯示趣味提示
             messageDisplay.innerText = "哎呀！這個字太調皮了，被猴子抓走了！\n請換一個單字試試看吧！";
-            messageDisplay.style.color = "#9C27B0"; // 用一個特別的紫色
+            messageDisplay.style.color = "#9C27B0"; 
 
-            // 播放一個滑稽的內建語音 (例如唸出 "Oops!")
             let utterance = new SpeechSynthesisUtterance("Oops!");
             utterance.lang = 'en-US';
-            utterance.pitch = 2; // 提高音調變得很像卡通人物
+            utterance.pitch = 2; 
             window.speechSynthesis.speak(utterance);
 
-            // 兩秒後自動清除，讓小朋友可以繼續操作
             setTimeout(() => {
                 currentString = "";
                 updateDisplay("請點擊字母開始拼字！", "#ff9800");
             }, 2500);
         }
 
-        // --- 4. API 查詢與發音邏輯 ---
+        // --- 5. API 查詢與發音邏輯 ---
         async function checkIfValidWord(word) {
             try {
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
@@ -178,7 +249,7 @@
 
                     updateDisplay("恭喜！這是一個單字！🎉\n正在翻譯中...", "#4CAF50");
                     
-                    // ⚠️ 將下方網址換成您的 Google API
+                    // ⚠️ 部署時請務必將此處替換為您的 Google Apps Script 網址
                     let gasUrl = `https://script.google.com/macros/s/AKfycbz4bOT00wJck7SpSxNgUtFCItmQF7uuJ2HpniPQZGOkzP818pU6UdFtOZ923-QqLd3RKQ/exec?word=${word}`;
                     
                     let transResponse = await fetch(gasUrl);
@@ -213,4 +284,3 @@
     </script>
 </body>
 </html>
-
