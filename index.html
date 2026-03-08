@@ -5,45 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>英文拼字練習</title>
     <style>
+        /* 基礎設定與自適應滾動 */
         body {
             font-family: 'Arial', sans-serif;
             margin: 0; 
-            height: 100vh; 
+            min-height: 100vh; /* 允許手機版向下滾動 */
             background-color: #f0f8ff; 
             user-select: none;
             touch-action: manipulation;
         }
         
+        /* 採用 CSS Grid 重構整體排版 */
         .main-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
+            display: grid;
+            /* 手機版預設：單欄直排 */
+            grid-template-columns: 1fr;
+            grid-template-areas: 
+                "display"
+                "keyboard"
+                "combos";
+            gap: 10px;
         }
-        @media (min-width: 768px) { .main-container { flex-direction: row; } }
-        
-        /* 左半部：單一字母與控制鍵 */
+
+        /* 顯示區 (右上/上方) */
+        .display-area {
+            grid-area: display;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 15px; text-align: center;
+            /* 手機版吸頂設定，確保打字時看得到畫面 */
+            position: sticky; top: 0; z-index: 100;
+            background-color: #f0f8ff;
+            border-bottom: 2px dashed #ccc;
+        }
+        #current-word { 
+            font-size: clamp(40px, 8vw, 60px); /* 隨螢幕縮放字體 */
+            letter-spacing: 5px; color: #333; min-height: 70px; font-weight: bold; 
+        }
+        #message { 
+            font-size: clamp(18px, 4vw, 24px); 
+            color: #ff9800; margin-top: 10px; white-space: pre-line; 
+        }
+
+        /* 左側/中央 鍵盤區 */
         .left-panel {
-            flex: 1; 
-            display: flex; 
-            flex-direction: column;
-            padding: 20px; 
-            border-right: 2px dashed #ccc;
+            grid-area: keyboard;
+            padding: 10px 20px;
+            display: flex; flex-direction: column;
         }
         .keyboard-area {
-            display: flex; 
-            flex-wrap: wrap; 
-            align-content: flex-start; 
-            gap: 8px; 
-            flex: 1;
+            display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px;
         }
         .letter-btn {
             width: calc(100% / 5 - 8px); 
-            min-width: 45px; height: 60px; font-size: 26px; font-weight: bold;
+            min-width: 45px; height: 55px; font-size: 24px; font-weight: bold;
             background-color: #fff; border: 2px solid #4CAF50; border-radius: 10px;
             cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .letter-btn:active { background-color: #4CAF50; color: white; transform: scale(0.95); }
         
+        /* 控制按鈕 */
         .control-group { display: flex; gap: 10px; margin-top: 15px; }
         .control-btn {
             flex: 1; height: 50px; font-size: 18px; font-weight: bold; color: white;
@@ -53,57 +73,47 @@
         .btn-backspace { background-color: #ff9800; } 
         .btn-clear { background-color: #f44336; }   
         
-        /* 右半部：顯示區與組合字母區 */
-        .right-panel {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        /* 右上：顯示區 */
-        .display-area {
-            flex: 5; 
-            display: flex; flex-direction: column; align-items: center;
-            justify-content: center; padding: 20px; text-align: center;
-        }
-        #current-word { font-size: 60px; letter-spacing: 5px; color: #333; min-height: 80px; font-weight: bold; }
-        #message { font-size: 24px; color: #ff9800; margin-top: 15px; white-space: pre-line; }
-        
-        /* 右下：組合字母區 (分群排版) */
+        /* 右下/下方 組合鍵區 */
         .combo-area {
-            flex: 5;
+            grid-area: combos;
             display: flex; flex-direction: column; gap: 15px;
-            padding: 20px;
+            padding: 15px 20px 30px 20px;
             background-color: #e8f5e9; 
             border-top: 2px dashed #ccc;
-            overflow-y: auto;
         }
-        
-        .combo-group {
-            display: flex; flex-direction: column; gap: 8px;
-        }
+        .combo-group { display: flex; flex-direction: column; gap: 8px; }
         .combo-title {
             font-size: 16px; font-weight: bold; color: #555;
             border-left: 4px solid #555; padding-left: 8px;
         }
-        .combo-buttons {
-            display: flex; flex-wrap: wrap; gap: 8px;
-        }
+        .combo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
         
-        /* 一般組合鍵 (紫色) */
         .combo-btn {
             width: calc(100% / 4 - 8px); 
-            min-width: 55px; height: 50px; font-size: 22px; font-weight: bold;
+            min-width: 55px; height: 50px; font-size: 20px; font-weight: bold;
             background-color: #fff; border: 2px solid #9C27B0; border-radius: 10px;
             color: #9C27B0; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .combo-btn:active { background-color: #9C27B0; color: white; transform: scale(0.95); }
-        
-        /* Magic E 組合鍵 (桃紅色) */
-        .magic-e-btn {
-            border-color: #E91E63; color: #E91E63;
-        }
+        .magic-e-btn { border-color: #E91E63; color: #E91E63; }
         .magic-e-btn:active { background-color: #E91E63; color: white; }
+
+        /* 平板與電腦端佈局設定 (寬度大於 768px 時觸發) */
+        @media (min-width: 768px) { 
+            body { height: 100vh; overflow: hidden; } /* 鎖定全局滾動，呈現 App 體驗 */
+            .main-container { 
+                grid-template-columns: 1fr 1fr; /* 左右各半 */
+                grid-template-rows: auto 1fr;
+                grid-template-areas: 
+                    "keyboard display"
+                    "keyboard combos";
+                height: 100%;
+                gap: 0;
+            }
+            .left-panel { border-right: 2px dashed #ccc; overflow-y: auto; padding: 20px; }
+            .display-area { position: static; border-bottom: none; }
+            .combo-area { overflow-y: auto; padding: 20px; }
+        }
 
     </style>
 </head>
@@ -112,26 +122,24 @@
     <audio id="ios-audio-player"></audio>
 
     <div class="main-container">
+        <div class="display-area">
+            <div id="current-word"></div>
+            <div id="message">請點擊字母，拼完後按下確定！</div>
+        </div>
+
         <div class="left-panel">
             <div class="keyboard-area" id="keyboard"></div>
             <div class="control-group" id="controls"></div>
         </div>
 
-        <div class="right-panel">
-            <div class="display-area">
-                <div id="current-word"></div>
-                <div id="message">請點擊字母，拼完後按下確定！</div>
+        <div class="combo-area">
+            <div class="combo-group">
+                <div class="combo-title" style="border-left-color: #9C27B0;">子音組合</div>
+                <div id="consonant-combos" class="combo-buttons"></div>
             </div>
-            
-            <div class="combo-area">
-                <div class="combo-group">
-                    <div class="combo-title" style="border-left-color: #9C27B0;">子音組合</div>
-                    <div id="consonant-combos" class="combo-buttons"></div>
-                </div>
-                <div class="combo-group">
-                    <div class="combo-title" style="border-left-color: #E91E63;">魔法 E (a_e)</div>
-                    <div id="magice-combos" class="combo-buttons"></div>
-                </div>
+            <div class="combo-group">
+                <div class="combo-title" style="border-left-color: #E91E63;">魔法 E (a_e)</div>
+                <div id="magice-combos" class="combo-buttons"></div>
             </div>
         </div>
     </div>
@@ -145,7 +153,6 @@
         const controls = document.getElementById("controls");
         const audioPlayer = document.getElementById("ios-audio-player");
         
-        // 取得新的分群容器
         const consonantCombosContainer = document.getElementById("consonant-combos");
         const magicECombosContainer = document.getElementById("magice-combos");
 
@@ -165,7 +172,6 @@
         document.addEventListener('touchstart', unlockAudio, { once: true });
         document.addEventListener('click', unlockAudio, { once: true });
 
-        // --- 輸入邏輯 ---
         function handleInput(input) {
             unlockAudio(); 
             if (currentString.includes('_')) {
@@ -176,7 +182,6 @@
             updateDisplay("拼湊中...", "#ff9800");
         }
 
-        // --- 1. 左側字母區 ---
         const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
         alphabet.forEach(letter => {
             let btn = document.createElement("button");
@@ -186,7 +191,6 @@
             keyboard.appendChild(btn);
         });
 
-        // --- 2. 控制按鈕 ---
         let confirmBtn = document.createElement("button");
         confirmBtn.className = "control-btn btn-confirm";
         confirmBtn.innerText = "確定";
@@ -212,7 +216,6 @@
         controls.appendChild(backspaceBtn);
         controls.appendChild(clearBtn);
 
-        // --- 3. 右下組合字母區 (動態生成至各自的容器) ---
         const combos = ["th", "ch", "sh", "tr", "cr", "br", "gr", "bl"];
         combos.forEach(combo => {
             let btn = document.createElement("button");
@@ -225,7 +228,7 @@
         const magicE = ["a_e", "e_e", "i_e", "o_e", "u_e"];
         magicE.forEach(combo => {
             let btn = document.createElement("button");
-            btn.className = "combo-btn magic-e-btn"; // 額外套用專屬顏色類別
+            btn.className = "combo-btn magic-e-btn"; 
             btn.innerText = combo;
             btn.onclick = () => handleInput(combo);
             magicECombosContainer.appendChild(btn);
@@ -237,7 +240,6 @@
             messageDisplay.style.color = color;
         }
 
-        // --- 4. 核心檢查與攔截邏輯 ---
         function handleConfirmClick() {
             if (currentString.length === 0) {
                 updateDisplay("請先輸入字母喔！", "#f44336");
@@ -273,7 +275,6 @@
             }, 2500);
         }
 
-        // --- 5. API 查詢與發音邏輯 ---
         async function checkIfValidWord(word) {
             try {
                 let response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
